@@ -87,7 +87,7 @@ class LoadBalanceService:
 
         available_providers = self._get_providers_with_order(self._other_providers, self._fallback_order)
         if not available_providers:
-            raise RuntimeError("没有可用的provider")
+            raise RuntimeError("负载均衡器没有可用的provider")
 
         logger.debug(f"开始执行负载均衡，策略：{self._strategy}，"
                      f"可用provider：{[p.meta().id for p in available_providers]}")

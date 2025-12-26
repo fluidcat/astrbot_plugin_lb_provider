@@ -205,7 +205,10 @@ class LoadBalancerProvider(Provider):
     async def terminate(self):
         """终止时的清理工作"""
 
-        self.provider_config.update({"enable": False})
+        for idx, provider in enumerate(astrbot_config["provider"]):
+            if provider.get("id", None) == self.meta().id:
+                provider.update({"enable": False})
+                break
         astrbot_config.save_config()
 
         if hasattr(self, 'health_check_task') and self.health_check_task and not self.health_check_task.done():

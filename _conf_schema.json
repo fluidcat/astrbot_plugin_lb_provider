@@ -1,0 +1,9 @@
+{
+    "lb_provider_node_total": {
+        "description": "权重配置节点数量",
+        "type": "int",
+        "hint": "设置负载均衡Provider中权重配置节点数量",
+        "obvious_hint": true,
+        "default": 5
+    }
+}
