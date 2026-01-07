@@ -1,6 +1,6 @@
 from astrbot.api import logger
 from astrbot.api.star import Context, Star
-from astrbot.core import AstrBotConfig
+from astrbot.core import AstrBotConfig, astrbot_config
 
 # 硬编码provider类型名
 LOAD_BALANCER_PROVIDER_TYPE_NAME = "load_balancer_chat_completion"
@@ -37,6 +37,7 @@ class LBProviderPlugin(Star):
         try:
             from .provider import load_balancer_provider
             self.update_lb_provider()
+            await self.reload_provider()
         except ImportError as e:
             logger.error(f"导入 {LOAD_BALANCER_PROVIDER_TYPE_NAME} 失败，请检查依赖是否安装: {e}")
             raise
@@ -55,6 +56,16 @@ class LBProviderPlugin(Star):
         self.inject_provider_metadata()
         self.check_provider_config()
 
+    async def reload_provider(self):
+        lb_ps_ids = {ps.get('id') for ps in astrbot_config.get("provider_sources") if ps.get('type') == LOAD_BALANCER_PROVIDER_TYPE_NAME}
+        for provider_conf in astrbot_config["provider"]:
+            if provider_conf.get('provider_source_id') in lb_ps_ids:
+                try:
+                    await self.provider_manager.reload(provider_conf)
+                    logger.info(f"已经重新加载 Provider【{provider_conf.get('id')}】")
+                except Exception as ex:
+                    logger.error(f"reload_provider【{provider_conf.get('id')}】error", ex)
+
     def check_provider_config(self):
         """更新已有的负载均衡Provider实例的配置"""
         lb_providers = []
@@ -65,9 +76,9 @@ class LBProviderPlugin(Star):
             else:
                 worker_provider_ids.add(p.meta().id)
         for p in lb_providers:
-            weights = p.provider_config.get("lb_weights", {})
-            for lb_key, provider_weight in list(weights.items()):
-                provider_id = provider_weight.get("provider", "") if provider_weight else ""
+            weights = p.provider_config.get("lb_node_list", [])
+            provider_ids = [n["provider"] for n in weights if n["__template_key"] == "node" and n["provider"]]
+            for provider_id in provider_ids:
                 if provider_id not in worker_provider_ids:
                     provider_id and logger.warning(f"节点模型提供商【{provider_id}】未启用，该权重节点配置将被忽略")
 
@@ -147,7 +158,7 @@ class LBProviderPlugin(Star):
 
             # 从项目配置中移除相关配置
             items = CONFIG_METADATA_2["provider_group"]["metadata"]["provider"]["items"]
-            keys_to_remove = ["lb_strategy", "lb_fallback_order", "lb_weights", "lb_health_check_interval"]
+            keys_to_remove = ["lb_strategy", "lb_node_list", "lb_health_check_interval"]
             for key in keys_to_remove:
                 if key in items:
                     del items[key]
