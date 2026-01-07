@@ -107,7 +107,7 @@ class WeightedStrategy(LoadBalanceStrategy):
         super().__init__(provider_manager)
         self.failback_strategy = RoundRobinStrategy(provider_manager)
 
-    async def select_provider(self, providers: List[Provider], weights: Dict[str, Any] = None, **kwargs) -> Optional[
+    async def select_provider(self, providers: List[Provider], weights: list[tuple[str, str]] = None, **kwargs) -> Optional[
         Provider]:
         if not providers:
             return None
@@ -119,20 +119,13 @@ class WeightedStrategy(LoadBalanceStrategy):
         weighted_list = []
         total_weight = 0
 
+        weight_dict = dict(weights)
         for provider in providers:
-            provider_weight_config = None
-            provider_id = provider.meta().id
-            for weight_config in weights.values():
-                if isinstance(weight_config, dict) and weight_config.get("provider") == provider_id:
-                    provider_weight_config = weight_config
-                    break
-
-            weight = 1  # 默认权重
-            if provider_weight_config:
-                try:
-                    weight = int(provider_weight_config.get("weight", 1))
-                except (ValueError, TypeError):
-                    weight = 1
+            weight = weight_dict.get(provider.meta().id, "1")
+            try:
+                weight = int(weight)
+            except (ValueError, TypeError):
+                weight = 1
 
             if weight > 0:
                 total_weight += weight

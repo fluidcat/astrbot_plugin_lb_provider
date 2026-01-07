@@ -21,14 +21,6 @@ AstrBot 负载均衡 Provider 插件的第一个完整版本，支持多种负�
 
 ## 配置详解
 
-### 基本配置项
-
-| 配置项 | 类型 | 默认值 | 描述 |
-|--------|------|--------|------|
-| `lb_strategy` | string | `random` | 负载均衡策略 |
-| `lb_weights` | object | `{}` | 权重配置 |
-| `lb_health_check_interval` | string | `"30"` | 健康检查间隔（秒） |
-
 ### 负载均衡策略
 
 #### 1. 随机（Random）- `random`

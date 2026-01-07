@@ -9,14 +9,13 @@ PROVIDER_MANAGER = None
 
 class LBProviderPlugin(Star):
 
-    def __init__(self, context: Context, config: AstrBotConfig ):
+    def __init__(self, context: Context):
         super().__init__(context)
         self.context = context
         self.provider_manager = context.provider_manager
         self.original_load_provider = self.provider_manager.load_provider
         self.original_reload = self.provider_manager.reload
         self.original_terminate_provider = self.provider_manager.terminate_provider
-        self.lb_provider_node_total = config.get("lb_provider_node_total", 5)
         global PROVIDER_MANAGER
         PROVIDER_MANAGER = context.provider_manager
 
@@ -77,63 +76,60 @@ class LBProviderPlugin(Star):
         try:
             from astrbot.core.config.default import CONFIG_METADATA_2
 
-            weights_items = {}
-            weights_tmpl = {}
-            for index in range(0, self.lb_provider_node_total):
-                seq = index + 1
-                weights_tmpl[f"weight_node_{seq}"] = {"provider": "", "weight": "1"}
-                weights_items[f"weight_node_{seq}"] = {
-                    "description": f"权重节点",
-                    "type": "object",
-                    "items": {
-                        "provider": {
-                            "description": "节点模型",
-                            "type": "string",
-                            "_special": "select_provider",
-                        },
-                        "weight": {
-                            "description": "权重",
-                            "type": "string",
-                            "hint": "正整数, 建议1~1000"
-                        },
-                    }
-                }
-
             # 更新CONFIG_METADATA_2中的配置模板
             config_template = CONFIG_METADATA_2["provider_group"]["metadata"]["provider"]["config_template"]
             config_template["Load Balancer"] = {
-                "id": "load_balancer_default",
-                "type": LOAD_BALANCER_PROVIDER_TYPE_NAME,
-                "provider": LOAD_BALANCER_PROVIDER_TYPE_NAME,
-                "key": ["无需配置"],
-                "api_base": "自动切换",
-                "provider_type": "chat_completion",
-                "enable": False,
-                "lb_strategy": "round_robin",  # 负载均衡策略: round_robin, random, weighted, least_failure, fastest
-                "lb_weights": weights_tmpl,  # 动态生成的权重配置
-                "lb_health_check_interval": "1800"  # 健康检查间隔（秒）
+                "id": "load_balancer_default"
+                , "type": LOAD_BALANCER_PROVIDER_TYPE_NAME
+                , "provider": LOAD_BALANCER_PROVIDER_TYPE_NAME
+                , "key": ["无需配置"]
+                , "api_base": "自动切换"
+                , "provider_type": "chat_completion"
+                , "enable": False
+                , "lb_strategy": "round_robin"  # 负载均衡策略: round_robin, random, weighted, least_failure, fastest
+                , "lb_health_check_interval": "1800"  # 健康检查间隔（秒）
+                , "lb_node_list": []
             }
 
             # 更新项目配置
-            CONFIG_METADATA_2["provider_group"]["metadata"]["provider"]["items"].update({
-                "lb_strategy": {
-                    "description": "负载均衡策略",
-                    "type": "string",
-                    "options": ["round_robin", "random", "weighted", "least_failure", "fastest"],
-                    "hint": "轮询-round_robin, 随机-random, 加权-weighted, 最少故障-least_failure, 最快响应-fastest",
-                },
-                "lb_health_check_interval": {
-                    "description": "健康检查间隔（秒）",
-                    "type": "string",
-                },
-                "lb_weights": {
-                    "description": "权重配置",
-                    "type": "object",
-                    "items": weights_items,
-                    "hint": "负载节点顺序、权重配置，需要调整节点数量请通过插件配置调整。（权重值仅策略「weighted」时生效）",
-                    "obvious_hint": True
-                },
-            })
+            CONFIG_METADATA_2["provider_group"]["metadata"]["provider"]["items"].update(
+                {
+                    "lb_strategy": {
+                        "description": "负载均衡策略",
+                        "type": "string",
+                        "options": ["round_robin", "random", "weighted", "least_failure", "fastest",],
+                        "hint": "轮询-round_robin, 随机-random, 加权-weighted, 最少故障-least_failure, 最快响应-fastest",
+                    },
+                    "lb_health_check_interval": {
+                        "description": "健康检查间隔（秒）",
+                        "type": "string",
+                    },
+                    "lb_node_list": {
+                        "type": "template_list",
+                        "description": "负载节点配置",
+                        "hint": "负载节点、故障转移顺序、权重配置。（权重值仅策略「weighted」时生效）",
+                        "obvious_hint": True,
+                        "templates": {
+                            "node": {
+                                "name": "负载节点",
+                                "items": {
+                                    "provider": {
+                                        "description": "节点模型",
+                                        "type": "string",
+                                        "_special": "select_provider",
+                                    },
+                                    "weight": {
+                                        "description": "权重",
+                                        "type": "string",
+                                        "hint": "正整数, 建议1~1000",
+                                        "default": "1"
+                                    },
+                                },
+                            },
+                        },
+                    },
+                }
+            )
 
             logger.debug(f"已为 {LOAD_BALANCER_PROVIDER_TYPE_NAME} 适配器注入动态配置")
         except Exception as expt:

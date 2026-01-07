@@ -30,10 +30,12 @@ class LoadBalancerProvider(Provider):
     def __init__(self, provider_config: dict, provider_settings: dict):
         super().__init__(provider_config, provider_settings)
 
+        self.migrate(provider_config)
         # 从配置中获取负载均衡策略和设置
         self.strategy = provider_config.get("lb_strategy", DEFAULT_STRATEGY)  # 默认策略
-        # 为fallback_order和weights提供更合适的默认值，匹配main.py中的配置模板
-        self.provider_weights = provider_config.get("lb_weights", {})  # 权重配置，默认为空字典
+        self.lb_node_list = provider_config.get("lb_node_list", [])
+        # [(provider_id, weight)]
+        self.provider_weights = [(n['provider'], n['weight']) for n in self.lb_node_list if n['__template_key'] == "node" and n['provider']]
 
         # 将健康检查间隔转换为整数
         health_check_interval = provider_config.get("lb_health_check_interval", str(DEFAULT_HEALTH_CHECK_INTERVAL))
@@ -42,10 +44,7 @@ class LoadBalancerProvider(Provider):
         except (ValueError, TypeError):
             self.health_check_interval = DEFAULT_HEALTH_CHECK_INTERVAL  # 如果转换失败，使用默认值
 
-        node_keys = [k for k in self.provider_weights.keys()
-                     if k.startswith("weight_node_") and self.provider_weights[k].get("provider")]
-        node_keys = sorted(node_keys, key=lambda x: int(x.split("_")[-1]))
-        self.fallback_order = [self.provider_weights[k]["provider"] for k in node_keys]
+        self.fallback_order = [p for p,w in self.provider_weights]
 
         # 这些将在initialize方法中设置
         self.work_providers = []
@@ -53,6 +52,32 @@ class LoadBalancerProvider(Provider):
         # 初始化负载均衡服务（包含所有状态管理）
         self.load_balance_service = LoadBalanceService(self)
         self._meta = super().meta()
+
+    def migrate(self, provider_config: dict):
+        lb_weights = provider_config.get("lb_weights", {})
+        if not lb_weights:
+            return
+        lb_node_list = provider_config.get("lb_node_list", [])
+        for k, node in sorted(lb_weights.items(),key=lambda x: int(x[0].split("_")[-1])):
+            if node["provider"]:
+                lb_node_list.append(
+                    {
+                        "__template_key": "node",
+                        "provider": node["provider"],
+                        "weight": node["weight"],
+                    },
+                )
+
+        provider_config.update({"lb_node_list": lb_node_list})
+        provider_config.pop("lb_weights")
+
+        for p in astrbot_config['provider_sources']:
+            if p["id"] == provider_config["provider_source_id"]:
+                p.update({"lb_node_list": lb_node_list})
+                p.pop("lb_weights")
+
+        astrbot_config.save_config()
+
 
     def meta(self):
         if not self._meta:
@@ -204,12 +229,6 @@ class LoadBalancerProvider(Provider):
 
     async def terminate(self):
         """终止时的清理工作"""
-
-        for idx, provider in enumerate(astrbot_config["provider"]):
-            if provider.get("id", None) == self.meta().id:
-                provider.update({"enable": False})
-                break
-        astrbot_config.save_config()
 
         if hasattr(self, 'health_check_task') and self.health_check_task and not self.health_check_task.done():
             self.health_check_task.cancel()
