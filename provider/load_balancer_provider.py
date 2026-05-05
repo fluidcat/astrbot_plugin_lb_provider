@@ -131,6 +131,9 @@ class LoadBalancerProvider(Provider):
     async def get_models(self) -> List[str]:
         return ["自动选择"]
 
+    async def test(self, timeout: float = 45.0) -> None:
+        logger.info("LoadBalancerProvider 无需测试")
+
     async def text_chat(
             self,
             prompt: str | None = None,
